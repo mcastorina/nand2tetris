@@ -28,9 +28,14 @@ pass_count=0
 fail_names=""
 for file in *.tst; do
     printf "%-20s" "${file%.tst}"
-    if $hw_sim $PWD/$file >/dev/null 2>&1; then
+    result=$($hw_sim $PWD/$file 2>&1)
+    if [[ $? -eq 0 ]]; then
         echo -e "${_grn}ok${_rst}"
         pass_count=$((pass_count + 1))
+    elif [[ ! "$result" =~ "Comparison failure" ]]; then
+        # syntax error
+        echo -ne "${_red}fail: "
+        echo -e "$result${_rst}" | tail -n +2 | sed -e 's#/.*/projects/##'
     else
         echo -e "${_red}fail${_rst}"
         compare_results "${file%.tst}"
