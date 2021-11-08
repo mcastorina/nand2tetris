@@ -36,6 +36,7 @@ for file in *.tst; do
         # syntax error
         echo -ne "${_red}fail: "
         echo -e "$result${_rst}" | tail -n +2 | sed -e 's#/.*/projects/##'
+        fail_names="$fail_names, ${file%.tst}"
     else
         echo -e "${_red}fail${_rst}"
         compare_results "${file%.tst}"
