@@ -28,14 +28,14 @@ pass_count=0
 fail_names=""
 for file in *.tst; do
     printf "%-20s" "${file%.tst}"
-    result=$($hw_sim $PWD/$file 2>&1)
+    result=$("$hw_sim" $PWD/$file 2>&1)
     if [[ $? -eq 0 ]]; then
         echo -e "${_grn}ok${_rst}"
         pass_count=$((pass_count + 1))
     elif [[ ! "$result" =~ "Comparison failure" ]]; then
         # syntax error
         echo -ne "${_red}fail: "
-        echo -e "$result${_rst}" | tail -n +2 | sed -e 's#/.*/projects/##'
+        echo -e "$result${_rst}" | grep -v '_JAVA_OPTIONS' | sed -e 's#/.*/projects/##'
         fail_names="$fail_names, ${file%.tst}"
     else
         echo -e "${_red}fail${_rst}"
