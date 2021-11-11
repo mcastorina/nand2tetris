@@ -16,5 +16,23 @@ CHIP PC {
     OUT out[16];
 
     PARTS:
-    // Put your code here:
+    /**
+     *  reset load inc | select
+     *  ---------------+-------
+     *      0    0   0 |  cur
+     *      0    0   1 |  curPlusOne
+     *      0    1   0 |  in
+     *      0    1   1 |  in
+     *      1    0   0 |  zero
+     *      1    0   1 |  zero
+     *      1    1   0 |  zero
+     *      1    1   1 |  zero
+     */
+    Inc16(in=cur, out=curPlusOne);
+    Mux8Way16(
+        a=cur, b=curPlusOne, c=in, d=in,
+        e=false, f=false, g=false, h=false,
+        sel[2]=reset, sel[1]=load, sel[0]=inc, out=muxOut
+    );
+    Register(in=muxOut, load=true, out=cur, out=out);
 }
