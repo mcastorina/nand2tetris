@@ -5,6 +5,9 @@ hw_sim=/usr/bin/n2tHardwareSimulator
 # path to CPUEmulator.sh
 cpu_em=/usr/bin/n2tCPUEmulator
 
+# space separated list of tests to skip
+skip_list="Fill.tst"
+
 _red='\e[0;31m'
 _grn='\e[0;32m'
 _rst='\e[39;49m'
@@ -39,7 +42,12 @@ pass_count=0
 fail_names=""
 for file in *.tst; do
     printf "%-20s" "${file%.tst}"
-    result=$("$prog" $PWD/$file 2>&1)
+    if grep "$file" <<< "$skip_list" >/dev/null 2>&1; then
+        echo "skip"
+        continue
+    else
+        result=$("$prog" $PWD/$file 2>&1)
+    fi
     if [[ $? -eq 0 ]]; then
         echo -e "${_grn}ok${_rst}"
         pass_count=$((pass_count + 1))
