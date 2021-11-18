@@ -2,6 +2,8 @@
 
 # path to HardwareSimulator.sh
 hw_sim=/usr/bin/n2tHardwareSimulator
+# path to CPUEmulator.sh
+cpu_em=/usr/bin/n2tCPUEmulator
 
 _red='\e[0;31m'
 _grn='\e[0;32m'
@@ -23,12 +25,21 @@ if [[ -z $1 ]]; then
 fi
 
 cd "$1"
+if ls | grep '.hdl' >/dev/null 2>&1; then
+    prog="$hw_sim"
+elif ls | grep '.asm' >/dev/null 2>&1; then
+    prog="$cpu_em"
+else
+    echo "did not recognize any files to test"
+    exit 1
+fi
+
 total_count=0
 pass_count=0
 fail_names=""
 for file in *.tst; do
     printf "%-20s" "${file%.tst}"
-    result=$("$hw_sim" $PWD/$file 2>&1)
+    result=$("$prog" $PWD/$file 2>&1)
     if [[ $? -eq 0 ]]; then
         echo -e "${_grn}ok${_rst}"
         pass_count=$((pass_count + 1))
