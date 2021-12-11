@@ -39,5 +39,48 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+
+    // Instruction representation
+    //
+    //  15   14   13   12   11   10    9    8    7    6    5    4    3    2    1    0
+    // --------------------------------------------------------------------------------
+    // | i | ## | ## |  a | zx | nx | zy | ny |  f | no |  A |  D |  M | <0 | =0 | >0 |
+    // --------------------------------------------------------------------------------
+    //                \------------ compare -----------/ \--- dest ---/ \---- jmp ---/
+    //  where:
+    //    * i: 0 for A instruction, 1 for C instruction
+    //    * a: 0 for A register, 1 for M input as the second input to the ALU
+
+    Register(in=nextPC, load=true, out=regPC, out[0..14]=pc);
+    Register(in=regAIn, load=saveA, out=regA, out[0..14]=addressM);
+    Register(in=aluOut, load=saveD, out=regD);
+
+    Mux16(a=aluOut, b=instruction, sel=aInst, out=regAIn);
+    // instruction[12] is the `a` bit
+    Mux16(a=regA, b=inM, sel=instruction[12], out=regAOrM);
+
+    ALU(x=regD, y=regAOrM,
+        zx=instruction[11], // c5
+        nx=instruction[10], // c4
+        zy=instruction[9],  // c3
+        ny=instruction[8],  // c2
+        f=instruction[7],   // c1
+        no=instruction[6],  // c0
+        out=outM, out=aluOut, zr=zr, ng=ng);
+
+    Not(in=instruction[15], out=aInst);
+    // write destination only if it's a C instruction
+    And(a=instruction[15], b=instruction[3], out=writeM);
+    And(a=instruction[15], b=instruction[4], out=saveD);
+    // write A address if it's not an A instruction or the A destination is set
+    Or(a=aInst, b=instruction[5], out=saveA);
+
+    // next PC
+    Mux(sel=ng, a=instruction[0], b=instruction[2], out=notZero);
+    Mux(sel=zr, a=notZero, b=instruction[1], out=shouldJmp);
+    Inc16(in=regPC, out=pcPlusOne);
+    Mux8Way16(sel[2]=reset, sel[1]=aInst, sel[0]=shouldJmp,
+            a=pcPlusOne, b=regA, c=pcPlusOne, d=pcPlusOne,
+            e=false, f=false, g=false, h=false,
+            out=nextPC);
 }

@@ -6,7 +6,7 @@ hw_sim=/usr/bin/n2tHardwareSimulator
 cpu_em=/usr/bin/n2tCPUEmulator
 
 # space separated list of tests to skip
-skip_list="Fill.tst"
+skip_list="Fill.tst Memory.tst CPU.tst ComputerAdd.tst ComputerMax.tst ComputerRect.tst"
 
 _red='\e[0;31m'
 _grn='\e[0;32m'
@@ -41,7 +41,7 @@ total_count=0
 pass_count=0
 fail_names=""
 for file in *.tst; do
-    printf "%-20s" "${file%.tst}"
+    printf "%-30s" "${file%.tst}"
     if grep "$file" <<< "$skip_list" >/dev/null 2>&1; then
         echo "skip"
         continue
