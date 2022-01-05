@@ -1,3 +1,4 @@
+mod instruction;
 mod lexer;
-// mod parser;
+mod parser;
 mod token;

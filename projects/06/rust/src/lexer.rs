@@ -1,5 +1,4 @@
 use super::token::{Kind, Token};
-use crate::T;
 use std::iter::{Enumerate, Peekable};
 use std::str::Chars;
 
@@ -95,8 +94,7 @@ impl<'a> Iterator for Lexer<'a> {
 mod test {
     use super::Kind;
     use super::Lexer;
-    use super::Token;
-    use super::T;
+    use crate::T;
     // use hack_as_macros::Tpp;
 
     #[test]
@@ -123,7 +121,7 @@ mod test {
 
     #[test]
     fn lines() {
-        let lines: Vec<_> = Lexer::new("1\n2 2\n3 3 3\n").map(|t| t.line).collect();
+        let lines: Vec<_> = Lexer::new("1\n2 // 2\n3 3 3\n").map(|t| t.line).collect();
         assert_eq!(lines, vec![1, 1, 2, 2, 2, 3, 3, 3, 3,]);
     }
 }
