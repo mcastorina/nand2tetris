@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use std::num::ParseIntError;
 use thiserror::Error;
 
-use super::lexer::{Lexer, Token};
+use super::lexer::Lexer;
 use crate::T;
 use std::iter::Peekable;
 
@@ -127,19 +127,10 @@ impl<'a> Parser<'a> {
     }
 }
 
-// TODO: change to enum (do not support instructions with labels)
-// Vec<Line>
-// filter // instruction number
 #[derive(Debug, PartialEq, Eq)]
 pub struct Line {
-    line_number: usize,
-    inst: Result<LineData, ParseError>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum LineData {
-    Label(String),
-    Inst(Inst),
+    label: Option<String>,
+    inst: Result<Inst, ParseError>,
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
