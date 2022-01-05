@@ -3,6 +3,7 @@ use std::num::ParseIntError;
 use thiserror::Error;
 
 use super::lexer::Lexer;
+use super::parser::ParseError;
 use super::token::{Kind, Token};
 use crate::T;
 use std::iter::Peekable;
@@ -15,18 +16,26 @@ pub enum ADest<'a> {
 
 bitflags! {
     pub struct Dest: u8 {
+        const NONE = 0b000;
         const M = 0b001;
         const D = 0b010;
         const A = 0b100;
     }
 }
 
-#[rustfmt::skip]
-#[derive(Debug, PartialEq, Eq)]
-pub enum Jump {
-    JGT, JEQ, JGE,
-    JLT, JNE, JLE,
-    JMP,
+bitflags! {
+    pub struct Jump: u8 {
+        const GT = 0b001;
+        const EQ = 0b010;
+        const LT = 0b100;
+
+        const GE = Self::GT.bits | Self::EQ.bits;
+        const LE = Self::LT.bits | Self::EQ.bits;
+        const NE = Self::GT.bits | Self::LT.bits;
+
+        const NONE = 0b000;
+        const ALL = Self::GT.bits | Self::EQ.bits | Self::LT.bits;
+    }
 }
 
 #[rustfmt::skip]
@@ -73,7 +82,174 @@ macro_rules! cmp {
     [A-D] => { Comp::AMinusD };
     [M-D] => { Comp::MMinusD };
     [D&A] => { Comp::DAndA };
+    [A&D] => { Comp::DAndA };
     [D&M] => { Comp::DAndM };
+    [M&D] => { Comp::DAndM };
     [D|A] => { Comp::DOrA };
+    [A|D] => { Comp::DOrA };
     [D|M] => { Comp::DOrM };
+    [M|D] => { Comp::DOrM };
+}
+
+impl<'a> TryFrom<&Vec<Token<'a>>> for Dest {
+    type Error = ParseError;
+    fn try_from(tokens: &Vec<Token<'a>>) -> Result<Self, Self::Error> {
+        if tokens.len() < 2 || tokens[1].kind != T![=] {
+            return Ok(Dest::NONE);
+        }
+        if let T![ident(s)] = tokens[0].kind {
+            Ok(s.chars()
+                .map(|c| match c {
+                    'M' => Ok(Dest::M),
+                    'A' => Ok(Dest::A),
+                    'D' => Ok(Dest::D),
+                    _ => Err(ParseError::Dest),
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .iter()
+                .fold(Dest::NONE, |acc, dest| acc | *dest))
+        } else {
+            Err(ParseError::Dest)
+        }
+    }
+}
+
+impl<'a> TryFrom<&Vec<Token<'a>>> for Comp {
+    type Error = ParseError;
+    fn try_from(tokens: &Vec<Token<'a>>) -> Result<Self, Self::Error> {
+        // skip dest values if there are any
+        let mut tokens = &tokens[..];
+        if tokens.len() >= 2 && tokens[1].kind == T![=] {
+            tokens = &tokens[2..];
+        }
+        let kinds: Vec<_> = tokens.into_iter().map(|t| t.kind).collect();
+        Ok(match &kinds[..] {
+            [T![number(0)], ..] => cmp![0],
+            [T![number(1)], ..] => cmp![1],
+            [T![-], T![number(1)], ..] => cmp![-1],
+            [T![ident("D")], T![+], T![number(1)], ..] => cmp![D + 1],
+            [T![ident("A")], T![+], T![number(1)], ..] => cmp![A + 1],
+            [T![ident("M")], T![+], T![number(1)], ..] => cmp![M + 1],
+            [T![ident("D")], T![-], T![number(1)], ..] => cmp![D - 1],
+            [T![ident("A")], T![-], T![number(1)], ..] => cmp![A - 1],
+            [T![ident("M")], T![-], T![number(1)], ..] => cmp![M - 1],
+            [T![ident("D")], T![+], T![ident("A")], ..] => cmp![D + A],
+            [T![ident("A")], T![+], T![ident("D")], ..] => cmp![A + D],
+            [T![ident("D")], T![+], T![ident("M")], ..] => cmp![D + M],
+            [T![ident("M")], T![+], T![ident("D")], ..] => cmp![M + D],
+            [T![ident("D")], T![-], T![ident("A")], ..] => cmp![D - A],
+            [T![ident("D")], T![-], T![ident("M")], ..] => cmp![D - M],
+            [T![ident("A")], T![-], T![ident("D")], ..] => cmp![A - D],
+            [T![ident("M")], T![-], T![ident("D")], ..] => cmp![M - D],
+            [T![ident("D")], T![&], T![ident("A")], ..] => cmp![D & A],
+            [T![ident("D")], T![&], T![ident("M")], ..] => cmp![D & M],
+            [T![ident("A")], T![&], T![ident("D")], ..] => cmp![A & D],
+            [T![ident("M")], T![&], T![ident("D")], ..] => cmp![M & D],
+            [T![ident("D")], T![|], T![ident("A")], ..] => cmp![D | A],
+            [T![ident("D")], T![|], T![ident("M")], ..] => cmp![D | M],
+            [T![ident("A")], T![|], T![ident("D")], ..] => cmp![A | D],
+            [T![ident("M")], T![|], T![ident("D")], ..] => cmp![M | D],
+            [T![!], T![ident("D")], ..] => cmp![!D],
+            [T![!], T![ident("A")], ..] => cmp![!A],
+            [T![!], T![ident("M")], ..] => cmp![!M],
+            [T![-], T![ident("D")], ..] => cmp![-D],
+            [T![-], T![ident("A")], ..] => cmp![-A],
+            [T![-], T![ident("M")], ..] => cmp![-M],
+            [T![ident("D")], ..] => cmp![D],
+            [T![ident("A")], ..] => cmp![A],
+            [T![ident("M")], ..] => cmp![M],
+            _ => return Err(ParseError::Comp),
+        })
+    }
+}
+
+impl<'a> TryFrom<&Vec<Token<'a>>> for Jump {
+    type Error = ParseError;
+    fn try_from(tokens: &Vec<Token<'a>>) -> Result<Self, Self::Error> {
+        if tokens.len() < 2 {
+            return Ok(Jump::NONE);
+        }
+        if tokens[tokens.len() - 2].kind != T![;] {
+            return Ok(Jump::NONE);
+        }
+        Ok(match tokens[tokens.len() - 1].kind {
+            T![ident("JGT")] => Jump::GT,
+            T![ident("JEQ")] => Jump::EQ,
+            T![ident("JGE")] => Jump::GE,
+            T![ident("JLT")] => Jump::LT,
+            T![ident("JNE")] => Jump::NE,
+            T![ident("JLE")] => Jump::LE,
+            T![ident("JMP")] => Jump::ALL,
+            _ => return Err(ParseError::Jump),
+        })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::ParseError;
+    use super::{Comp, Dest, Jump};
+    use super::{Kind, Token};
+    use crate::{cmp, T};
+
+    macro_rules! tok {
+        ( $($kind:tt)* ) => { Token{ line: 0, kind: T![$($kind)*] } };
+    }
+
+    #[test]
+    fn jump() {
+        let tokens = &vec![tok!(;), tok!(ident("JGT"))];
+        assert_eq!(tokens.try_into(), Ok(Jump::GT));
+
+        let tokens = &vec![tok!(ident("D")), tok!(;), tok!(ident("JNE"))];
+        assert_eq!(tokens.try_into(), Ok(Jump::NE));
+
+        let tokens = &vec![tok!(@), tok!(ident("LOOP"))];
+        assert_eq!(tokens.try_into(), Ok(Jump::NONE));
+
+        let tokens = &vec![tok!(;), tok!(ident("OOP"))];
+        assert_eq!(TryInto::<Jump>::try_into(tokens), Err(ParseError::Jump));
+    }
+
+    #[test]
+    fn dest() {
+        let test = |input| {
+            let tokens = &vec![tok!(ident(input)), tok!(=)];
+            TryInto::<Dest>::try_into(tokens)
+        };
+
+        assert_eq!(test("D"), Ok(Dest::D));
+        assert_eq!(test("MD"), Ok(Dest::D | Dest::M));
+        assert_eq!(test("DM"), Ok(Dest::D | Dest::M));
+        assert_eq!(test("ADM"), Ok(Dest::A | Dest::D | Dest::M));
+        assert_eq!(test("ADAMDADA"), Ok(Dest::A | Dest::D | Dest::M));
+        assert_eq!(test("X"), Err(ParseError::Dest));
+
+        let tokens = &vec![tok!(@), tok!(number(100))];
+        assert_eq!(tokens.try_into(), Ok(Dest::NONE));
+    }
+
+    #[test]
+    fn comp() {
+        let tokens = &vec![tok!(-), tok!(ident("M"))];
+        assert_eq!(tokens.try_into(), Ok(cmp![-M]));
+
+        let tokens = &vec![
+            tok!(ident("M")),
+            tok!(=),
+            tok!(ident("D")),
+            tok!(&),
+            tok!(ident("A")),
+        ];
+        assert_eq!(tokens.try_into(), Ok(cmp![D & A]));
+
+        let tokens = &vec![
+            tok!(ident("M")),
+            tok!(=),
+            tok!(ident("D")),
+            tok!(;),
+            tok!(ident("JGT")),
+        ];
+        assert_eq!(tokens.try_into(), Ok(cmp![D]));
+    }
 }

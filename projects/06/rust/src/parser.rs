@@ -6,6 +6,7 @@ use super::instruction::{ADest, Comp, Dest, Jump};
 use super::lexer::Lexer;
 use super::token::{Kind, Token};
 use crate::T;
+use std::convert::TryInto;
 use std::iter::Peekable;
 
 pub struct Parser<'a> {
@@ -38,6 +39,21 @@ impl<'a> Parser<'a> {
             self.lexer.next()?;
         }
         Some(())
+    }
+
+    /// Collects the significant tokens of the current line into a vector.
+    fn collect_line(&mut self) -> Vec<Token<'a>> {
+        let mut line = vec![];
+        while self
+            .lexer
+            .peek()
+            .map(|t| !matches!(t.kind, T!['\n'] | T![comment(_)]))
+            .unwrap_or(false)
+        {
+            // we can unwrap here because peek is Some
+            line.push(self.lexer.next().unwrap());
+        }
+        line
     }
 
     /// Parse an A instruction.
@@ -76,7 +92,12 @@ impl<'a> Parser<'a> {
 
     /// Parse a C instruction.
     fn c_inst(&mut self) -> Result<LineData<'a>, ParseError> {
-        todo!()
+        let line = self.collect_line();
+        Ok(LineData::CInst(
+            (&line).try_into()?,
+            (&line).try_into()?,
+            (&line).try_into()?,
+        ))
     }
 }
 
@@ -116,7 +137,7 @@ pub struct Line<'a> {
 pub enum LineData<'a> {
     Label(&'a str),
     AInst(ADest<'a>),
-    CInst(Dest, Comp, Option<Jump>),
+    CInst(Dest, Comp, Jump),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -133,6 +154,12 @@ pub enum ParseError {
     A,
     #[error("error parsing label")]
     Label,
+    #[error("error parsing dest")]
+    Dest,
+    #[error("error parsing comp")]
+    Comp,
+    #[error("error parsing jump")]
+    Jump,
 }
 
 #[cfg(test)]
