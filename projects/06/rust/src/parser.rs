@@ -1,4 +1,3 @@
-use bitflags::bitflags;
 use std::num::ParseIntError;
 use thiserror::Error;
 
@@ -164,7 +163,9 @@ pub enum ParseError {
 
 #[cfg(test)]
 mod test {
-    use super::{ADest, Kind, Line, LineData, ParseError, Parser, T};
+    use super::{ADest, Dest, Jump, Kind, Line, LineData, ParseError, Parser};
+    use crate::instruction::Comp;
+    use crate::{cmp, T};
 
     #[test]
     fn a_inst() {
@@ -202,6 +203,39 @@ mod test {
                     line: 3,
                     data: Ok(LineData::AInst(ADest::Const(123))),
                 },
+            ]
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn c_inst() {
+        let parser = Parser::new("D = M + 1; JEQ");
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![Line {
+                line: 1,
+                data: Ok(LineData::CInst(Dest::D, cmp![M + 1], Jump::EQ)),
+            }]
+        );
+
+        let parser = Parser::new("
+            foo = M + 1; JEQ
+            D = foo + 1; JEQ
+            D = M + 1; foo
+            D = M + 1; JEQ foo
+            D = M;
+            foo
+        ");
+        assert_eq!(
+            parser.collect::<Vec<_>>(),
+            vec![
+                Line { line: 2, data: Err(ParseError::Dest) },
+                Line { line: 3, data: Err(ParseError::Comp) },
+                Line { line: 4, data: Err(ParseError::Jump) },
+                Line { line: 5, data: Err(ParseError::Trailing) },
+                Line { line: 6, data: Ok(LineData::CInst(Dest::D, cmp![M], Jump::NONE)) },
+                Line { line: 7, data: Err(ParseError::Comp) },
             ]
         );
     }

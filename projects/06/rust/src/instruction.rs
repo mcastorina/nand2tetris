@@ -1,12 +1,8 @@
 use bitflags::bitflags;
-use std::num::ParseIntError;
-use thiserror::Error;
 
-use super::lexer::Lexer;
 use super::parser::ParseError;
 use super::token::{Kind, Token};
 use crate::T;
-use std::iter::Peekable;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ADest<'a> {
@@ -94,8 +90,11 @@ macro_rules! cmp {
 impl<'a> TryFrom<&Vec<Token<'a>>> for Dest {
     type Error = ParseError;
     fn try_from(tokens: &Vec<Token<'a>>) -> Result<Self, Self::Error> {
-        if tokens.len() < 2 || tokens[1].kind != T![=] {
-            return Ok(Dest::NONE);
+        let eq = tokens.into_iter().position(|tok| tok.kind == T![=]);
+        match eq {
+            None => return Ok(Dest::NONE),
+            Some(1) => (),
+            _ => return Err(ParseError::Dest),
         }
         if let T![ident(s)] = tokens[0].kind {
             Ok(s.chars()
@@ -166,22 +165,26 @@ impl<'a> TryFrom<&Vec<Token<'a>>> for Comp {
 impl<'a> TryFrom<&Vec<Token<'a>>> for Jump {
     type Error = ParseError;
     fn try_from(tokens: &Vec<Token<'a>>) -> Result<Self, Self::Error> {
-        if tokens.len() < 2 {
+        let semi = tokens.into_iter().position(|tok| tok.kind == T![;]);
+        if semi.is_none() {
             return Ok(Jump::NONE);
         }
-        if tokens[tokens.len() - 2].kind != T![;] {
-            return Ok(Jump::NONE);
-        }
-        Ok(match tokens[tokens.len() - 1].kind {
-            T![ident("JGT")] => Jump::GT,
-            T![ident("JEQ")] => Jump::EQ,
-            T![ident("JGE")] => Jump::GE,
-            T![ident("JLT")] => Jump::LT,
-            T![ident("JNE")] => Jump::NE,
-            T![ident("JLE")] => Jump::LE,
-            T![ident("JMP")] => Jump::ALL,
+        let semi = semi.unwrap();
+        let jmp = match tokens.get(semi + 1).map(|t| t.kind) {
+            Some(T![ident("JGT")]) => Jump::GT,
+            Some(T![ident("JEQ")]) => Jump::EQ,
+            Some(T![ident("JGE")]) => Jump::GE,
+            Some(T![ident("JLT")]) => Jump::LT,
+            Some(T![ident("JNE")]) => Jump::NE,
+            Some(T![ident("JLE")]) => Jump::LE,
+            Some(T![ident("JMP")]) => Jump::ALL,
+            None => Jump::NONE, // blank semicolon is okay
             _ => return Err(ParseError::Jump),
-        })
+        };
+        if tokens.get(semi + 2).is_some() {
+            return Err(ParseError::Trailing);
+        }
+        Ok(jmp)
     }
 }
 
